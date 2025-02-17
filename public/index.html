@@ -1,71 +1,87 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Live Voice Chat</title>
+  <title>Live Voice Chat with Debug Console</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
-    .user { margin: 5px; padding: 5px; border: 1px solid #ccc; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #console { height: 200px; overflow-y: scroll; background: #000; color: #0f0; padding: 10px; font-family: monospace; border-radius: 5px; }
+    audio { margin: 5px; }
   </style>
 </head>
 <body>
   <h1>Live Voice Chat</h1>
   <p>Join instantly. Your voice is live to everyone here.</p>
-  <div id="users"></div>
+
+  <h3>On-Screen Console:</h3>
+  <div id="console"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
   <script>
+    const log = (message) => {
+      const consoleDiv = document.getElementById('console');
+      consoleDiv.innerHTML += `[${new Date().toLocaleTimeString()}] ${message}<br>`;
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    };
+
     const socket = io();
     const peers = {};
-    const localAudio = document.createElement('audio');
-    localAudio.muted = true;
 
-    // Auto-start microphone
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        localAudio.srcObject = stream;
-        localAudio.play();
+    log("Connecting to microphone...");
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+      log("Microphone ready.");
 
-        // Handle peer connections
-        socket.on('signal', async ({ from, signal }) => {
-          if (!peers[from]) connectToNewUser(from, false, stream);
-          peers[from].signal(signal);
-        });
+      // Play local audio (muted)
+      const localAudio = document.createElement('audio');
+      localAudio.srcObject = stream;
+      localAudio.muted = true;
+      localAudio.play();
 
-        socket.on('user-disconnected', id => {
-          if (peers[id]) peers[id].destroy();
-          delete peers[id];
-        });
+      socket.on('signal', ({ from, signal }) => {
+        log(`Signal from ${from}`);
+        if (!peers[from]) connectToNewUser(from, false, stream);
+        peers[from].signal(signal);
+      });
 
-        // Connect to all existing users
-        socket.on('existing-users', users => {
-          users.forEach(userId => connectToNewUser(userId, true, stream));
-        });
-      })
-      .catch(console.error);
+      socket.on('user-disconnected', id => {
+        log(`User disconnected: ${id}`);
+        if (peers[id]) peers[id].destroy();
+        delete peers[id];
+      });
+
+      socket.emit('ready');
+      log("Sent ready signal to server.");
+    }).catch(error => {
+      log(`Error accessing microphone: ${error.message}`);
+    });
 
     function connectToNewUser(userId, initiator, stream) {
+      log(`Connecting to user ${userId}...`);
       const peer = new SimplePeer({ initiator, trickle: false, stream });
 
       peer.on('signal', signal => {
         socket.emit('signal', { to: userId, signal });
+        log(`Sent signal to ${userId}`);
       });
 
       peer.on('stream', remoteStream => {
+        log(`Receiving audio from ${userId}`);
         const audio = document.createElement('audio');
         audio.srcObject = remoteStream;
         audio.autoplay = true;
-        audio.controls = true;
-        document.getElementById('users').appendChild(audio);
+        document.body.appendChild(audio);
       });
 
       peer.on('close', () => {
-        peer.destroy();
+        log(`Connection closed with ${userId}`);
+      });
+
+      peer.on('error', err => {
+        log(`Peer error (${userId}): ${err.message}`);
       });
 
       peers[userId] = peer;
     }
   </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
 </body>
 </html>
