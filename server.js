@@ -8,17 +8,25 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
+let users = new Set();
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
+  users.add(socket.id);
+  io.emit('existing-users', Array.from(users));
 
-  // Forward WebRTC signaling
-  socket.on('signal', (data) => {
-    io.to(data.to).emit('signal', { from: socket.id, ...data });
+  socket.on('ready', () => {
+    console.log(`User ready: ${socket.id}`);
   });
 
-  // Notify others on disconnect
+  socket.on('signal', (data) => {
+    console.log(`Signal from ${socket.id} to ${data.to}`);
+    io.to(data.to).emit('signal', { from: socket.id, signal: data.signal });
+  });
+
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
+    users.delete(socket.id);
     io.emit('user-disconnected', socket.id);
   });
 });
