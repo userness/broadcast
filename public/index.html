@@ -31,14 +31,14 @@
     navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
       log("Microphone ready.");
 
-      // Play local audio (muted)
+      // Play local audio (muted for user)
       const localAudio = document.createElement('audio');
       localAudio.srcObject = stream;
       localAudio.muted = true;
-      localAudio.play();
+      localAudio.autoplay = true;
 
       socket.on('signal', ({ from, signal }) => {
-        log(`Signal from ${from}`);
+        log(`Signal received from ${from}`);
         if (!peers[from]) connectToNewUser(from, false, stream);
         peers[from].signal(signal);
       });
@@ -61,23 +61,31 @@
 
       peer.on('signal', signal => {
         socket.emit('signal', { to: userId, signal });
-        log(`Sent signal to ${userId}`);
+        log(`Sent WebRTC signal to ${userId}`);
+      });
+
+      peer.on('connect', () => {
+        log(`WebRTC connected with ${userId}!`);
       });
 
       peer.on('stream', remoteStream => {
-        log(`Receiving audio from ${userId}`);
+        log(`Receiving remote audio from ${userId}`);
         const audio = document.createElement('audio');
         audio.srcObject = remoteStream;
         audio.autoplay = true;
         document.body.appendChild(audio);
       });
 
+      peer.on('track', (track) => {
+        log(`Track received from ${userId}: ${track.kind}`);
+      });
+
       peer.on('close', () => {
-        log(`Connection closed with ${userId}`);
+        log(`WebRTC connection closed with ${userId}`);
       });
 
       peer.on('error', err => {
-        log(`Peer error (${userId}): ${err.message}`);
+        log(`WebRTC error with ${userId}: ${err.message}`);
       });
 
       peers[userId] = peer;
