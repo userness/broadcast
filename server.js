@@ -17,10 +17,15 @@ io.on('connection', (socket) => {
 
   socket.on('ready', () => {
     console.log(`User ready: ${socket.id}`);
+    // Broadcast to everyone except the sender
+    socket.broadcast.emit('signal', {
+      from: socket.id,
+      signal: 'ready'
+    });
   });
 
   socket.on('signal', (data) => {
-    console.log(`Signal from ${socket.id} to ${data.to}`);
+    console.log(`Signal received: ${socket.id} -> ${data.to}`);
     io.to(data.to).emit('signal', { from: socket.id, signal: data.signal });
   });
 
